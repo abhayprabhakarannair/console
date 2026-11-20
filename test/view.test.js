@@ -168,3 +168,56 @@ test("hostile meta does not break rendering", () => {
   const list = cards(r, NOW);
   assert.deepEqual(list.map((c) => [c.id, c.actions.length, c.facts.length, c.temps.length]), [["devil", 0, 0, 0], ["imp", 0, 0, 0]]);
 });
+
+const ROUTER_META = { kind: "warden", version: "0.2.0", modules: ["system", "wake", "wan", "clients"], commands: ["wake", "refresh"], wakes: ["devil"] };
+
+function withRouter({ routerStatus = "online", impStatus = "online", routerState = {} } = {}) {
+  const r = home({ impStatus });
+  for (const [topic, payload] of [
+    ["home/er605/meta", ROUTER_META],
+    ["home/er605/status", routerStatus],
+    ["home/er605/state", { wake: { targets: { devil: { power: "waking", waking_for_s: 3 } } }, ...routerState }],
+  ]) {
+    apply(r, { topic, payload: typeof payload === "string" ? payload : JSON.stringify(payload), now: NOW });
+  }
+  return r;
+}
+
+test("any device announcing wakes can wake; the first online one by id is used", () => {
+  const wake = action(byId(cards(withRouter(), NOW), "devil"), "Wake");
+  assert.equal(wake.topic, "home/er605/cmd");
+  assert.equal(wake.disabled, false);
+});
+
+test("wake falls back to another online waker", () => {
+  const wake = action(byId(cards(withRouter({ routerStatus: "offline" }), NOW), "devil"), "Wake");
+  assert.deepEqual([wake.topic, wake.disabled], ["home/imp/cmd", false]);
+});
+
+test("wake is disabled only when every waker is offline", () => {
+  const wake = action(byId(cards(withRouter({ routerStatus: "offline", impStatus: "offline" }), NOW), "devil"), "Wake");
+  assert.deepEqual([wake.topic, wake.disabled, wake.reason], ["home/er605/cmd", true, "er605 is offline"]);
+});
+
+test("power comes from the chosen waker, reading warden's wake module state", () => {
+  assert.equal(byId(cards(withRouter(), NOW), "devil").power, "waking");
+});
+
+test("router card lists links in order with the active one, and online devices", () => {
+  const router = byId(cards(withRouter({
+    routerState: {
+      wan: { active: "railwire", links: [{ name: "bsnl", status: "offline" }, { name: "railwire", status: "online" }, "junk", { name: 3 }] },
+      clients: { online: [{ name: "devil", ip: "192.0.2.4" }, { name: null, ip: "192.0.2.204" }, { name: "x" }, 7] },
+    },
+  }), NOW), "er605");
+  assert.deepEqual(router.links, [
+    { name: "bsnl", status: "offline", active: false },
+    { name: "railwire", status: "online", active: true },
+  ]);
+  assert.deepEqual(router.clients, [{ name: "devil", ip: "192.0.2.4" }, { name: null, ip: "192.0.2.204" }]);
+});
+
+test("cards without wan or clients state have empty lists", () => {
+  const devil = byId(cards(home(), NOW), "devil");
+  assert.deepEqual([devil.links, devil.clients], [[], []]);
+});
