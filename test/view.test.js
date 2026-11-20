@@ -203,18 +203,59 @@ test("power comes from the chosen waker, reading warden's wake module state", ()
   assert.equal(byId(cards(withRouter(), NOW), "devil").power, "waking");
 });
 
-test("router card lists links in order with the active one, and online devices", () => {
+test("router card lists links in order with the active one and usage", () => {
   const router = byId(cards(withRouter({
     routerState: {
-      wan: { active: "railwire", links: [{ name: "bsnl", status: "offline" }, { name: "railwire", status: "online" }, "junk", { name: 3 }] },
-      clients: { online: [{ name: "devil", ip: "192.0.2.4" }, { name: null, ip: "192.0.2.204" }, { name: "x" }, 7] },
+      wan: {
+        active: "railwire",
+        links: [
+          { name: "bsnl", status: "offline", used_bytes: 5_200_000_000 },
+          { name: "railwire", status: "online" },
+          { name: "jio", status: "online", used_bytes: 312_400_000_000, cap_bytes: 1_000_000_000_000 },
+          "junk",
+          { name: 3 },
+        ],
+      },
     },
   }), NOW), "er605");
   assert.deepEqual(router.links, [
-    { name: "bsnl", status: "offline", active: false },
-    { name: "railwire", status: "online", active: true },
+    { name: "bsnl", status: "offline", active: false, usage: "5.2 GB" },
+    { name: "railwire", status: "online", active: true, usage: null },
+    { name: "jio", status: "online", active: false, usage: "312 GB of 1.0 TB" },
   ]);
-  assert.deepEqual(router.clients, [{ name: "devil", ip: "192.0.2.4" }, { name: null, ip: "192.0.2.204" }]);
+});
+
+const ROUTER_STATE = {
+  wan: { active: "bsnl", links: [{ name: "bsnl", status: "online" }, { name: "jio", status: "online" }] },
+  clients: {
+    online: [
+      { name: "satan", ip: "192.0.2.8", link: "wifi", band: "5 GHz", signal: -58, via: "jio", override: "jio" },
+      { name: null, ip: "192.0.2.204", link: "wired", via: "bsnl", override: null },
+      { name: "x" },
+      7,
+    ],
+  },
+};
+
+test("devices show link, ISP and a choice of ISP sent to the router", () => {
+  const meta = { ...ROUTER_META, commands: ["wake", "isp", "refresh"] };
+  const r = withRouter({ routerState: ROUTER_STATE });
+  apply(r, { topic: "home/er605/meta", payload: JSON.stringify(meta), now: NOW });
+  const [satan, unnamed] = byId(cards(r, NOW), "er605").clients;
+  assert.deepEqual([satan.name, satan.link, satan.via, satan.override], ["satan", "Wi-Fi 5 GHz · -58 dBm", "jio", "jio"]);
+  assert.deepEqual(satan.isp.map((a) => [a.label, a.selected]), [["Auto", false], ["bsnl", false], ["jio", true]]);
+  assert.deepEqual(satan.isp[1], {
+    label: "bsnl", topic: "home/er605/cmd", payload: "isp 192.0.2.8 bsnl console", selected: false, disabled: false, reason: null,
+  });
+  assert.deepEqual([unnamed.name, unnamed.link, unnamed.isp.find((a) => a.selected).label], [null, "wired", "Auto"]);
+});
+
+test("ISP choices are disabled while the router is offline and absent without the isp command", () => {
+  const offline = withRouter({ routerStatus: "offline", routerState: ROUTER_STATE });
+  apply(offline, { topic: "home/er605/meta", payload: JSON.stringify({ ...ROUTER_META, commands: ["isp"] }), now: NOW });
+  assert.ok(byId(cards(offline, NOW), "er605").clients[0].isp.every((a) => a.disabled));
+  const without = byId(cards(withRouter({ routerState: ROUTER_STATE }), NOW), "er605");
+  assert.deepEqual(without.clients[0].isp, []);
 });
 
 test("cards without wan or clients state have empty lists", () => {

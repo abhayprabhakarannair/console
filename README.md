@@ -4,7 +4,7 @@ Web console for the home message bus. It subscribes to `home/#` and builds one c
 
 | `kind` | Card |
 |---|---|
-| `warden` | agent status, power actions it advertises, countdown with cancel, uptime/load/memory/kernel, temperatures; internet links in failover order with the active one (`wan` module) and online devices (`clients` module) |
+| `warden` | agent status, power actions it advertises, countdown with cancel, uptime/load/memory/kernel, temperatures; internet links in failover order with the active one and usage this cycle against any cap (`wan` module); online devices with their link (wired, or Wi-Fi band and signal) and the ISP their traffic uses (`clients` module), and per device an Auto/ISP choice sent as `isp <ip> <isp|auto>` when the agent advertises `isp` |
 | `imp` | its own health and restart |
 | other | scalar fields of `state` |
 

@@ -1,4 +1,4 @@
-import { celsius, duration, percent, signal } from "./format.js";
+import { bytes, celsius, duration, percent, signal } from "./format.js";
 import { ROOT } from "./model.js";
 
 const POWER_ACTIONS = [
@@ -32,13 +32,49 @@ function links(state) {
   const wan = isObject(state?.wan) ? state.wan : {};
   return asArray(wan.links)
     .filter((l) => isObject(l) && typeof l.name === "string" && typeof l.status === "string")
-    .map((l) => ({ name: l.name, status: l.status, active: l.name === wan.active }));
+    .map((l) => {
+      const used = Number.isFinite(l.used_bytes) ? bytes(l.used_bytes) : null;
+      const usage = used && Number.isFinite(l.cap_bytes) ? `${used} of ${bytes(l.cap_bytes)}` : used;
+      return { name: l.name, status: l.status, active: l.name === wan.active, usage };
+    });
 }
 
-function clients(state) {
-  return asArray(state?.clients?.online)
+function linkText(c) {
+  if (c.link === "wired") return "wired";
+  if (c.link !== "wifi") return null;
+  const band = typeof c.band === "string" ? ` ${c.band}` : "";
+  return `Wi-Fi${band}${Number.isFinite(c.signal) ? ` · ${c.signal} dBm` : ""}`;
+}
+
+// Per-device ISP choice: Auto plus every link, sent to the device that reported the list.
+function ispChoices(d, ip, override, names) {
+  if (!asArray(d?.meta?.commands).includes("isp") || !names.length) return [];
+  const online = d.status === "online";
+  return ["auto", ...names].map((isp) => ({
+    label: isp === "auto" ? "Auto" : isp,
+    topic: cmd(d.id),
+    payload: `isp ${ip} ${isp} console`,
+    selected: (override ?? "auto") === isp,
+    disabled: !online,
+    reason: online ? null : `${d.id} is ${d.status ?? "unknown"}`,
+  }));
+}
+
+function clients(d) {
+  const names = links(d?.state).map((l) => l.name);
+  return asArray(d?.state?.clients?.online)
     .filter((c) => isObject(c) && typeof c.ip === "string")
-    .map((c) => ({ name: typeof c.name === "string" ? c.name : null, ip: c.ip }));
+    .map((c) => {
+      const override = typeof c.override === "string" ? c.override : null;
+      return {
+        name: typeof c.name === "string" ? c.name : null,
+        ip: c.ip,
+        link: linkText(c),
+        via: typeof c.via === "string" ? c.via : null,
+        override,
+        isp: ispChoices(d, c.ip, override, names),
+      };
+    });
 }
 
 function pendingOf(d, now) {
@@ -153,7 +189,7 @@ export function cards(registry, now) {
       facts: kind === "warden" ? wardenFacts(d.state, now) : kind === "imp" ? impFacts(d, now) : rawFacts(d?.state),
       temps: t,
       links: links(d?.state),
-      clients: clients(d?.state),
+      clients: clients(d),
       hottest: t.length ? t.reduce((a, b) => (b.value > a.value ? b : a)) : null,
       events: (d?.events ?? []).slice(-5).reverse(),
     };
