@@ -11,18 +11,34 @@ const cmd = (id) => `${ROOT}/${id}/cmd`;
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const asArray = (v) => (Array.isArray(v) ? v : []);
 
-// Which imp wakes which machine, and what that imp currently sees for it.
+// Which device wakes which machine, and what it currently sees for it. Any device listing the machine in
+// meta.wakes can (imp, or a warden with the wake module); an online one is preferred, then the first by id.
 function wakers(registry) {
   const out = new Map();
-  for (const d of registry.values()) {
-    if (d.meta?.kind !== "imp") continue;
-    for (const target of asArray(d.meta.wakes)) {
-      if (typeof target !== "string" || out.has(target)) continue;
-      const seen = d.state?.targets?.[target];
-      out.set(target, { imp: d.id, online: d.status === "online", power: isObject(seen) ? seen : null });
+  for (const d of [...registry.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+    const targets = d.state?.targets ?? d.state?.wake?.targets;
+    for (const target of asArray(d.meta?.wakes)) {
+      if (typeof target !== "string") continue;
+      const online = d.status === "online";
+      if (out.has(target) && (out.get(target).online || !online)) continue;
+      const seen = isObject(targets) ? targets[target] : null;
+      out.set(target, { via: d.id, online, power: isObject(seen) ? seen : null });
     }
   }
   return out;
+}
+
+function links(state) {
+  const wan = isObject(state?.wan) ? state.wan : {};
+  return asArray(wan.links)
+    .filter((l) => isObject(l) && typeof l.name === "string" && typeof l.status === "string")
+    .map((l) => ({ name: l.name, status: l.status, active: l.name === wan.active }));
+}
+
+function clients(state) {
+  return asArray(state?.clients?.online)
+    .filter((c) => isObject(c) && typeof c.ip === "string")
+    .map((c) => ({ name: typeof c.name === "string" ? c.name : null, ip: c.ip }));
 }
 
 function pendingOf(d, now) {
@@ -96,10 +112,10 @@ export function cards(registry, now) {
     if (waker) {
       actions.push({
         label: "Wake",
-        topic: cmd(waker.imp),
+        topic: cmd(waker.via),
         payload: `wake ${id} console`,
         disabled: !waker.online,
-        reason: waker.online ? null : `${waker.imp} is offline`,
+        reason: waker.online ? null : `${waker.via} is offline`,
       });
     }
     for (const a of POWER_ACTIONS) {
@@ -136,6 +152,8 @@ export function cards(registry, now) {
       actions,
       facts: kind === "warden" ? wardenFacts(d.state, now) : kind === "imp" ? impFacts(d, now) : rawFacts(d?.state),
       temps: t,
+      links: links(d?.state),
+      clients: clients(d?.state),
       hottest: t.length ? t.reduce((a, b) => (b.value > a.value ? b : a)) : null,
       events: (d?.events ?? []).slice(-5).reverse(),
     };
