@@ -1,0 +1,143 @@
+import { celsius, duration, percent, signal } from "./format.js";
+import { ROOT } from "./model.js";
+
+const POWER_ACTIONS = [
+  { command: "suspend", label: "Sleep" },
+  { command: "reboot", label: "Reboot", confirm: "Reboot {id}?" },
+  { command: "shutdown", label: "Shut down", confirm: "Shut down {id}?" },
+];
+
+const cmd = (id) => `${ROOT}/${id}/cmd`;
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const asArray = (v) => (Array.isArray(v) ? v : []);
+
+// Which imp wakes which machine, and what that imp currently sees for it.
+function wakers(registry) {
+  const out = new Map();
+  for (const d of registry.values()) {
+    if (d.meta?.kind !== "imp") continue;
+    for (const target of asArray(d.meta.wakes)) {
+      if (typeof target !== "string" || out.has(target)) continue;
+      const seen = d.state?.targets?.[target];
+      out.set(target, { imp: d.id, online: d.status === "online", power: isObject(seen) ? seen : null });
+    }
+  }
+  return out;
+}
+
+function pendingOf(d, now) {
+  const p = d.state?.power?.pending;
+  if (!isObject(p) || typeof p.action !== "string" || !Number.isFinite(p.in_s) || d.stateAt === null) return null;
+  const remaining = Math.max(0, Math.ceil((d.stateAt + p.in_s * 1000 - now) / 1000));
+  return { action: p.action, source: typeof p.source === "string" ? p.source : "?", remaining };
+}
+
+// Best available answer to "is this machine on": the LAN ping beats the agent's own status.
+function powerOf(d, waker) {
+  const seen = waker?.power?.power;
+  if (["online", "offline", "waking"].includes(seen)) return seen;
+  if (d?.status === "online") return "online";
+  if (d?.status === "suspended") return "asleep";
+  if (d?.status === "offline") return "offline";
+  return "unknown";
+}
+
+function temps(state) {
+  const out = [];
+  for (const [chip, readings] of Object.entries(isObject(state?.sensors?.temps) ? state.sensors.temps : {})) {
+    if (!isObject(readings)) continue;
+    for (const [label, value] of Object.entries(readings)) {
+      if (Number.isFinite(value)) out.push({ chip, label, value, text: celsius(value) });
+    }
+  }
+  return out;
+}
+
+function wardenFacts(state, now) {
+  const s = isObject(state?.system) ? state.system : {};
+  const facts = [];
+  if (Number.isFinite(s.boot_time)) facts.push({ label: "Uptime", value: duration(now / 1000 - s.boot_time) });
+  if (Array.isArray(s.load) && s.load.every(Number.isFinite)) facts.push({ label: "Load", value: s.load.join(" / ") });
+  if (Number.isFinite(s.mem_used_pct)) facts.push({ label: "Memory", value: percent(s.mem_used_pct) });
+  if (typeof s.kernel === "string") facts.push({ label: "Kernel", value: s.kernel });
+  return facts;
+}
+
+function impFacts(d, now) {
+  const s = d.state ?? {};
+  const facts = [];
+  if (Number.isFinite(s.rssi)) facts.push({ label: "Wi-Fi", value: signal(s.rssi) });
+  if (Number.isFinite(s.uptime_s) && d.stateAt !== null) {
+    facts.push({ label: "Uptime", value: duration(s.uptime_s + (now - d.stateAt) / 1000) });
+  }
+  if (typeof s.ip === "string" && s.ip) facts.push({ label: "LAN IP", value: s.ip });
+  if (typeof d.meta?.version === "string") facts.push({ label: "Firmware", value: d.meta.version });
+  return facts;
+}
+
+function rawFacts(state) {
+  return Object.entries(state ?? {})
+    .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
+    .map(([label, v]) => ({ label, value: String(v) }));
+}
+
+export function cards(registry, now) {
+  const wake = wakers(registry);
+  const ids = new Set([...registry.keys(), ...wake.keys()]);
+  return [...ids].sort().map((id) => {
+    const d = registry.get(id) ?? null;
+    const kind = d?.meta?.kind ?? (wake.has(id) ? "machine" : "unknown");
+    const waker = wake.get(id);
+    const online = d?.status === "online";
+    const pending = d ? pendingOf(d, now) : null;
+    const commands = new Set(asArray(d?.meta?.commands));
+    const actions = [];
+
+    if (waker) {
+      actions.push({
+        label: "Wake",
+        topic: cmd(waker.imp),
+        payload: `wake ${id} console`,
+        disabled: !waker.online,
+        reason: waker.online ? null : `${waker.imp} is offline`,
+      });
+    }
+    for (const a of POWER_ACTIONS) {
+      if (!commands.has(a.command)) continue;
+      actions.push({
+        label: a.label,
+        topic: cmd(id),
+        payload: `${a.command} console`,
+        confirm: a.confirm?.replace("{id}", id) ?? null,
+        disabled: !online || pending !== null,
+        reason: !online ? `${id} is ${d.status ?? "unknown"}` : pending ? `${pending.action} pending` : null,
+      });
+    }
+    if (kind === "imp" && commands.has("restart")) {
+      actions.push({
+        label: "Restart",
+        topic: cmd(id),
+        payload: "restart console",
+        confirm: `Restart ${id}?`,
+        disabled: !online,
+        reason: online ? null : `${id} is ${d.status ?? "unknown"}`,
+      });
+    }
+
+    const t = temps(d?.state);
+    return {
+      id,
+      kind,
+      status: d?.status ?? "unknown",
+      power: powerOf(d, waker),
+      pending: pending && commands.has("cancel")
+        ? { ...pending, cancel: { topic: cmd(id), payload: "cancel console", disabled: !online } }
+        : pending,
+      actions,
+      facts: kind === "warden" ? wardenFacts(d.state, now) : kind === "imp" ? impFacts(d, now) : rawFacts(d?.state),
+      temps: t,
+      hottest: t.length ? t.reduce((a, b) => (b.value > a.value ? b : a)) : null,
+      events: (d?.events ?? []).slice(-5).reverse(),
+    };
+  });
+}

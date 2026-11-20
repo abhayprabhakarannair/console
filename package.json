@@ -1,0 +1,12 @@
+{
+  "name": "console",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-reporter=spec",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "mqtt": "5.16.1"
+  }
+}
