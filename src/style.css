@@ -39,6 +39,13 @@ summary { cursor: pointer; color: var(--dim); }
 .links li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .links .pill { margin-left: 0; min-width: 4.5em; text-align: center; }
 .links .tag { color: var(--green); }
+.links .usage { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+.clients { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.clients li { padding: 6px 0; border-top: 1px solid var(--line); }
+.clients .how { color: var(--dim); font-size: 13px; }
+.clients .isp { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.clients .isp button { font-size: 12px; padding: 2px 8px; }
+.clients .isp button.selected { outline: 1px solid var(--green); color: var(--green); }
 .events { list-style: none; margin: 12px 0 0; padding: 0; font-size: 13px; }
 .events li { padding: 4px 0; border-top: 1px solid var(--line); word-break: break-word; }
 .events time { color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums; }

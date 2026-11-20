@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { celsius, duration, percent, signal } from "../src/format.js";
+import { bytes, celsius, duration, percent, signal } from "../src/format.js";
 
 test("duration", () => {
   const cases = [[0, "0s"], [59.9, "59s"], [60, "1m 0s"], [3599, "59m 59s"], [3600, "1h 0m"], [86399, "23h 59m"],
@@ -22,4 +22,9 @@ test("signal quality bands", () => {
     [-76, "weak"]];
   for (const [dbm, quality] of cases) assert.equal(signal(dbm), `${dbm} dBm (${quality})`);
   assert.equal(signal(undefined), "–");
+});
+
+test("bytes in decimal units", () => {
+  assert.deepEqual([0, 999, 1_500, 312_400_000_000, 1_000_000_000_000, -1, NaN].map(bytes),
+    ["0 B", "999 B", "1.5 KB", "312 GB", "1.0 TB", "–", "–"]);
 });
