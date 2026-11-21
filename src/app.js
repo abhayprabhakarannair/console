@@ -99,11 +99,11 @@ function eventText(e) {
 
 function upsSection(u) {
   return section("UPS", "battery",
-    el("div", { class: "ups" },
-      el("div", { class: "gauge" },
+    el("div", { class: "gauge" },
+      el("div", { class: "ups" },
         el("strong", { class: `charge ${u.charge?.level ?? ""}` }, u.charge?.text ?? "–"),
-        u.charge ? bar(u.charge.pct, u.charge.level) : null),
-      el("span", { class: `badge ${u.tone}` }, el("i"), u.label)),
+        el("span", { class: `badge ${u.tone}` }, el("i"), u.label)),
+      u.charge ? bar(u.charge.pct, u.charge.level) : null),
     u.facts.length ? el("div", { class: "kv" }, ...u.facts.map((f) => el("span", {}, el("span", { class: "muted" }, f.label), el("b", {}, f.value)))) : null,
     u.model || u.error ? el("p", { class: `note ${u.error ? "crit" : ""}` }, u.error ?? u.model) : null);
 }

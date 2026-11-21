@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { ago, bytes, celsius, duration, level, percent, rate, signalBars } from "../src/format.js";
 
 test("duration", () => {
-  const cases = [[0, "0s"], [59.9, "59s"], [60, "1m 0s"], [3599, "59m 59s"], [3600, "1h 0m"], [86399, "23h 59m"],
-    [86400, "1d 0h"], [90061, "1d 1h"], [-1, "–"], [Number.NaN, "–"], [Infinity, "–"], [undefined, "–"]];
+  const cases = [[0, "0s"], [59.9, "59s"], [60, "1m"], [61, "1m 1s"], [2280, "38m"], [3599, "59m 59s"], [3600, "1h"],
+    [3660, "1h 1m"], [86399, "23h 59m"], [86400, "1d"], [90061, "1d 1h"], [-1, "–"], [Number.NaN, "–"], [Infinity, "–"], [undefined, "–"]];
   for (const [input, expected] of cases) assert.equal(duration(input), expected, String(input));
 });
 

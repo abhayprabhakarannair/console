@@ -4,10 +4,9 @@ export function duration(seconds) {
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
-  if (d) return `${d}d ${h}h`;
-  if (h) return `${h}h ${m}m`;
-  if (m) return `${m}m ${s % 60}s`;
-  return `${s}s`;
+  const parts = d ? [[d, "d"], [h, "h"]] : h ? [[h, "h"], [m, "m"]] : [[m, "m"], [s % 60, "s"]];
+  const shown = parts.filter(([n], i) => n || (i === 1 && !parts[0][0]));
+  return shown.map(([n, unit]) => `${n}${unit}`).join(" ");
 }
 
 export function celsius(value) {
