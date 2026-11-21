@@ -1,11 +1,13 @@
 import { apply, createRegistry, ROOT } from "./model.js";
-import { cards } from "./view.js";
+import { cards, countdown, elapsed } from "./view.js";
 
 const config = window.CONSOLE ?? {};
 const registry = createRegistry();
 const $devices = document.getElementById("devices");
 const $hub = document.getElementById("hub");
+const $empty = el("p", { class: "empty" }, "No devices on the bus yet.");
 let client = null;
+let shown = new Map();
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -25,7 +27,7 @@ function send({ topic, payload, confirm: question }) {
 
 function button(action, extra = "") {
   return el("button", {
-    class: `${extra} ${action.label === "Shut down" ? "danger" : ""}`.trim(),
+    class: [extra, action.style].filter(Boolean).join(" ") || null,
     disabled: action.disabled,
     title: action.reason ?? null,
     on: () => send(action),
@@ -38,9 +40,9 @@ function eventText(e) {
   return `${event}${detail ? ` · ${detail}` : ""}`;
 }
 
-function card(c) {
+function card(c, previous) {
   const hot = c.hottest ? el("span", { class: "hot" }, `${c.hottest.chip} ${c.hottest.label} ${c.hottest.text}`) : null;
-  return el("section", { class: "card" },
+  const node = el("section", { class: "card" },
     el("header", {},
       el("span", { class: `dot ${c.power}` }),
       el("h2", {}, c.id),
@@ -48,10 +50,11 @@ function card(c) {
       el("span", { class: `pill ${c.status}` }, c.status)),
     el("p", { class: "power" }, `power: ${c.power}`),
     c.pending ? el("div", { class: "pending" },
-      el("span", {}, `${c.pending.action} in ${c.pending.remaining}s (from ${c.pending.source})`),
+      el("span", {}, `${c.pending.action} in `, el("span", { "data-due": c.pending.due }), `s (from ${c.pending.source})`),
       c.pending.cancel ? button({ label: "Cancel", ...c.pending.cancel }, "cancel") : null) : null,
-    c.actions.length ? el("div", { class: "actions" }, ...c.actions.map((a) => button(a, a.label === "Wake" ? "primary" : ""))) : null,
-    c.facts.length ? el("dl", {}, ...c.facts.flatMap((f) => [el("dt", {}, f.label), el("dd", {}, f.value)])) : null,
+    c.actions.length ? el("div", { class: "actions" }, ...c.actions.map((a) => button(a))) : null,
+    c.facts.length ? el("dl", {}, ...c.facts.flatMap((f) => [
+      el("dt", {}, f.label), "since" in f ? el("dd", { "data-since": f.since }) : el("dd", {}, f.value)])) : null,
     c.links.length ? el("ul", { class: "links" },
       ...c.links.map((l) => el("li", {},
         el("span", { class: `pill ${l.status === "online" ? "online" : "offline"}` }, l.status),
@@ -74,15 +77,35 @@ function card(c) {
       el("dl", {}, ...c.temps.flatMap((t) => [el("dt", {}, `${t.chip} ${t.label}`), el("dd", {}, t.text)]))) : null,
     c.events.length ? el("ul", { class: "events" },
       ...c.events.map((e) => el("li", {}, el("time", {}, new Date(e.at).toLocaleTimeString()), eventText(e)))) : null);
+  const wasOpen = [...(previous?.querySelectorAll("details") ?? [])].map((d) => d.open);
+  node.querySelectorAll("details").forEach((d, i) => { d.open = wasOpen[i] ?? false; });
+  return node;
 }
 
+function tick() {
+  const now = Date.now();
+  for (const n of $devices.querySelectorAll("[data-due]")) n.textContent = countdown(Number(n.dataset.due), now);
+  for (const n of $devices.querySelectorAll("[data-since]")) n.textContent = elapsed(Number(n.dataset.since), now);
+}
+
+// Rebuilds only the cards whose content changed and leaves the others in place, so hover, focus and open
+// sections survive updates to other devices.
 function render() {
-  const open = new Set([...$devices.querySelectorAll("details[open]")].map((d) => d.closest(".card")?.querySelector("h2")?.textContent));
-  const list = cards(registry, Date.now());
-  $devices.replaceChildren(...(list.length ? list.map(card) : [el("p", { class: "empty" }, "No devices on the bus yet.")]));
-  for (const d of $devices.querySelectorAll("details")) {
-    if (open.has(d.closest(".card").querySelector("h2").textContent)) d.open = true;
-  }
+  const next = new Map();
+  const nodes = cards(registry).map((c) => {
+    const key = JSON.stringify(c);
+    const old = shown.get(c.id);
+    const node = old?.key === key ? old.node : card(c, old?.node);
+    next.set(c.id, { key, node });
+    return node;
+  });
+  if (!nodes.length) nodes.push($empty);
+  nodes.forEach((node, i) => {
+    if ($devices.children[i] !== node) $devices.insertBefore(node, $devices.children[i] ?? null);
+  });
+  while ($devices.children.length > nodes.length) $devices.lastElementChild.remove();
+  shown = next;
+  tick();
 }
 
 function setHub(text, cls) {
@@ -115,4 +138,4 @@ function connect() {
 
 render();
 connect();
-setInterval(render, 1000);
+setInterval(tick, 1000);
