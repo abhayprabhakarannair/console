@@ -100,7 +100,7 @@ test("countdown rounds up and stops at zero", () => {
 });
 
 test("elapsed formats the time since, and a future start as unknown", () => {
-  assert.equal(elapsed(NOW - 3_600_000, NOW), "1h 0m");
+  assert.equal(elapsed(NOW - 3_600_000, NOW), "1h");
   assert.equal(elapsed(NOW - 59_500, NOW), "59s");
   assert.equal(elapsed(NOW + 5000, NOW), "–");
 });
@@ -328,15 +328,15 @@ test("UPS view: status, charge, runtime, load and power", () => {
   assert.deepEqual(full.ups, {
     status: "online", label: "On mains", tone: "ok",
     charge: { pct: 100, text: "100%", level: "ok" },
-    runtime: "38m 0s",
-    facts: [{ label: "Runtime", value: "38m 0s" }, { label: "Load", value: "162 W · 18%" }, { label: "Input", value: "232 V" }],
+    runtime: "38m",
+    facts: [{ label: "Runtime", value: "38m" }, { label: "Load", value: "162 W · 18%" }, { label: "Input", value: "232 V" }],
     model: "Back-UPS", error: null,
   });
   assert.equal(full.alert, null);
 
   const onBattery = ups({ status: "on_battery", charge_pct: 54, runtime_s: 1260 });
   assert.deepEqual([onBattery.ups.label, onBattery.ups.charge.level], ["On battery", "warn"]);
-  assert.deepEqual(onBattery.alert, { tone: "warn", text: "On battery · 21m 0s left" });
+  assert.deepEqual(onBattery.alert, { tone: "warn", text: "On battery · 21m left" });
   assert.deepEqual(ups({ status: "low_battery", charge_pct: 20 }).alert, { tone: "crit", text: "Battery low · shutting down" });
   assert.equal(ups({ status: "low_battery", charge_pct: 20 }).ups.charge.level, "crit");
 });

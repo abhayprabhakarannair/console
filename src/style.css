@@ -168,7 +168,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 
 /* UPS */
 .ups { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.gauge { flex: 1; display: grid; gap: 6px; }
+.gauge { display: grid; gap: 8px; }
 .charge { font-size: 26px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
 .gauge .bar { height: 8px; }
 .gauge .bar.ok span { background: var(--ok); }
