@@ -42,6 +42,14 @@ export function rate(bps) {
   return `${i === 0 ? Math.round(v) : v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
 }
 
+// Link quality as measured by the router: "2.1% loss · 18 ms", or null when neither is known.
+export function quality(lossPct, latencyMs) {
+  const parts = [];
+  if (Number.isFinite(lossPct) && lossPct >= 0) parts.push(`${lossPct.toFixed(1)}% loss`);
+  if (Number.isFinite(latencyMs) && latencyMs >= 0) parts.push(`${Math.round(latencyMs)} ms`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 // Short "time ago" for freshness and activity: seconds, then minutes, hours, days.
 export function ago(seconds) {
   if (!Number.isFinite(seconds)) return "–";

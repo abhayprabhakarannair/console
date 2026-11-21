@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ago, bytes, celsius, duration, level, percent, rate, signalBars } from "../src/format.js";
+import { ago, bytes, celsius, duration, level, percent, quality, rate, signalBars } from "../src/format.js";
 
 test("duration", () => {
   const cases = [[0, "0s"], [59.9, "59s"], [60, "1m"], [61, "1m 1s"], [2280, "38m"], [3599, "59m 59s"], [3600, "1h"],
@@ -38,4 +38,12 @@ test("level against warn and crit thresholds", () => {
 
 test("signal bars from dBm", () => {
   assert.deepEqual([-40, -55, -56, -65, -66, -75, -76, -95, null].map(signalBars), [4, 4, 3, 3, 2, 2, 1, 1, 0]);
+});
+
+test("quality", () => {
+  assert.equal(quality(2.14, 18.6), "2.1% loss · 19 ms");
+  assert.equal(quality(0, undefined), "0.0% loss");
+  assert.equal(quality(undefined, 40), "40 ms");
+  assert.equal(quality(-1, Number.NaN), null);
+  assert.equal(quality("5", null), null);
 });

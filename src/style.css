@@ -107,6 +107,7 @@ h2 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
 .badge.info i { animation: pulse 1.2s infinite; }
 .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
 .dot.crit { background: var(--crit); }
+.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent); }
 @keyframes pulse { 50% { opacity: .25; } }
 
 .alert, .pending {
@@ -195,6 +196,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.3; }
 .who strong, .who .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who .muted { font-size: 12px; font-variant-numeric: tabular-nums; }
+.who .fallback { font-size: 12px; color: var(--warn); }
 .via { font-size: 12px; color: var(--dim); padding: 2px 8px; border-radius: 6px; background: var(--raised); }
 .signal { width: 15px; height: 13px; }
 .signal rect { fill: var(--faint); opacity: .45; }
@@ -204,6 +206,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .segmented { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--raised); flex: none; }
 .segmented button { border: 0; background: transparent; padding: 3px 8px; border-radius: 6px; font-size: 12px; color: var(--dim); cursor: pointer; }
 .segmented button:hover:not(:disabled) { color: var(--fg); }
+.segmented button.degraded { color: var(--warn); }
 .segmented button.selected { background: var(--card); color: var(--fg); font-weight: 600; opacity: 1; box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
 
 /* Temperatures */
