@@ -43,7 +43,7 @@ test("invalid payloads are ignored and keep the previous value", () => {
 
 test("an empty retained payload clears that leaf, and the device once everything is gone", () => {
   const r = createRegistry();
-  apply(r, msg("home/old/meta", '{"kind":"imp"}'));
+  apply(r, msg("home/old/meta", '{"kind":"warden"}'));
   apply(r, msg("home/old/status", "offline"));
   assert.equal(apply(r, msg("home/old/status", "", { retained: true })), "old");
   assert.equal(r.get("old").status, null);
@@ -55,15 +55,15 @@ test("an empty retained payload clears that leaf, and the device once everything
 
 test("events are capped and stamped; retained events are not replayed", () => {
   const r = createRegistry();
-  for (let i = 0; i < MAX_EVENTS + 5; i++) apply(r, msg("home/imp/event", JSON.stringify({ event: "e", n: i }), { now: i }));
-  const events = r.get("imp").events;
+  for (let i = 0; i < MAX_EVENTS + 5; i++) apply(r, msg("home/er605/event", JSON.stringify({ event: "e", n: i }), { now: i }));
+  const events = r.get("er605").events;
   assert.equal(events.length, MAX_EVENTS);
   assert.deepEqual(events[0], { event: "e", n: 5, at: 5 });
-  assert.equal(apply(r, msg("home/imp/event", '{"event":"old"}', { retained: true })), null);
+  assert.equal(apply(r, msg("home/er605/event", '{"event":"old"}', { retained: true })), null);
 });
 
 test("an event cannot overwrite the receipt time", () => {
   const r = createRegistry();
-  apply(r, msg("home/imp/event", '{"event":"boot","at":1}', { now: 99 }));
-  assert.equal(r.get("imp").events[0].at, 99);
+  apply(r, msg("home/er605/event", '{"event":"boot","at":1}', { now: 99 }));
+  assert.equal(r.get("er605").events[0].at, 99);
 });
