@@ -5,10 +5,9 @@ Web console for the home message bus. It subscribes to `home/#` and builds one c
 | `kind` | Card |
 |---|---|
 | `warden` | agent status, power actions it advertises, countdown with cancel, uptime/load/memory/kernel, temperatures; internet links in failover order with the active one and usage this cycle against any cap (`wan` module); online devices with their link (wired, or Wi-Fi band and signal) and the ISP their traffic uses (`clients` module), and per device an Auto/ISP choice sent as `isp <ip> <isp|auto>` when the agent advertises `isp` |
-| `imp` | its own health and restart |
 | other | scalar fields of `state` |
 
-Any device that lists machines in `meta.wakes` (an imp, or a warden with the `wake` module) puts a **Wake** button on each of those machines' cards. With several, the button goes through an online one, the first by id.
+Any device that lists machines in `meta.wakes` (a warden with the `wake` module) puts a **Wake** button on each of those machines' cards. With several, the button goes through an online one, the first by id.
 
 A machine's power state prefers that waker's LAN view over the agent's own status, so a host shows as off even when its agent is down.
 
