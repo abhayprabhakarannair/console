@@ -46,14 +46,15 @@ function linkText(c) {
   return `Wi-Fi${band}${Number.isFinite(c.signal) ? ` · ${c.signal} dBm` : ""}`;
 }
 
-// Per-device ISP choice: Auto plus every link, sent to the device that reported the list.
-function ispChoices(d, ip, override, names) {
-  if (!asArray(d?.meta?.commands).includes("isp") || !names.length) return [];
+// Per-device ISP choice: Auto plus every link, sent to the device that reported the list. Only for DHCP
+// reservations: an override follows the address, which another device could lease next.
+function ispChoices(d, c, override, names) {
+  if (c.reserved !== true || !asArray(d?.meta?.commands).includes("isp") || !names.length) return [];
   const online = d.status === "online";
   return ["auto", ...names].map((isp) => ({
     label: isp === "auto" ? "Auto" : isp,
     topic: cmd(d.id),
-    payload: `isp ${ip} ${isp} console`,
+    payload: `isp ${c.ip} ${isp} console`,
     selected: (override ?? "auto") === isp,
     disabled: !online,
     reason: online ? null : `${d.id} is ${d.status ?? "unknown"}`,
@@ -72,7 +73,7 @@ function clients(d) {
         link: linkText(c),
         via: typeof c.via === "string" ? c.via : null,
         override,
-        isp: ispChoices(d, c.ip, override, names),
+        isp: ispChoices(d, c, override, names),
       };
     });
 }

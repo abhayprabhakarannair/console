@@ -27,7 +27,7 @@ function send({ topic, payload, confirm: question }) {
 
 function button(action, extra = "") {
   return el("button", {
-    class: [extra, action.style].filter(Boolean).join(" ") || null,
+    class: [extra, action.style].filter(Boolean).join(" "),
     disabled: action.disabled,
     title: action.reason ?? null,
     on: () => send(action),
