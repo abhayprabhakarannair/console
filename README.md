@@ -4,12 +4,14 @@ Web console for the home message bus. It subscribes to `home/#` and builds one c
 
 | `kind` | Card |
 |---|---|
-| `warden` | agent status, power actions it advertises, countdown with cancel, uptime/load/memory/kernel, temperatures; internet links in failover order with the active one and usage this cycle against any cap (`wan` module); online devices with their link (wired, or Wi-Fi band and signal) and the ISP their traffic uses (`clients` module), and, for devices with a DHCP reservation (`reserved`), an Auto/ISP choice sent as `isp <ip> <isp|auto>` when the agent advertises `isp` |
+| `warden` | one badge for power and agent (Online, Asleep, Off, Waking, Agent down, Offline), kernel and how long ago the state arrived (amber once older than 90 s), power actions it advertises, countdown with cancel; uptime and load, bars for memory and each disk (`system.disks`); temperatures with the hottest per chip family; UPS charge, status, runtime, load and input voltage with a banner while on battery (`ups`); internet links in failover order with the active one, live down/up rates and usage this cycle with a bar against any cap (`wan` module); online devices with their link (wired, or Wi-Fi band and signal bars) and the ISP their traffic uses (`clients` module), and, for devices with a DHCP reservation (`reserved`), an Auto/ISP choice sent as `isp <ip> <isp|auto>` when the agent advertises `isp`; recent events |
 | other | scalar fields of `state` |
 
 Any device that lists machines in `meta.wakes` (a warden with the `wake` module) puts a **Wake** button on each of those machines' cards. With several, the button goes through an online one, the first by id.
 
 A machine's power state prefers that waker's LAN view over the agent's own status, so a host shows as off even when its agent is down.
+
+The top bar sums up the internet link in use, the UPS and the devices online, each only when some device reports it. Light and dark themes follow the system setting.
 
 All device data is rendered with `textContent`; nothing from the bus is interpreted as markup.
 
