@@ -4,7 +4,7 @@ Web console for the home message bus. It subscribes to `home/#` and builds one c
 
 | `kind` | Card |
 |---|---|
-| `warden` | agent status, power actions it advertises, countdown with cancel, uptime/load/memory/kernel, temperatures; internet links in failover order with the active one and usage this cycle against any cap (`wan` module); online devices with their link (wired, or Wi-Fi band and signal) and the ISP their traffic uses (`clients` module), and per device an Auto/ISP choice sent as `isp <ip> <isp|auto>` when the agent advertises `isp` |
+| `warden` | agent status, power actions it advertises, countdown with cancel, uptime/load/memory/kernel, temperatures; internet links in failover order with the active one and usage this cycle against any cap (`wan` module); online devices with their link (wired, or Wi-Fi band and signal) and the ISP their traffic uses (`clients` module), and, for devices with a DHCP reservation (`reserved`), an Auto/ISP choice sent as `isp <ip> <isp|auto>` when the agent advertises `isp` |
 | other | scalar fields of `state` |
 
 Any device that lists machines in `meta.wakes` (a warden with the `wake` module) puts a **Wake** button on each of those machines' cards. With several, the button goes through an online one, the first by id.
