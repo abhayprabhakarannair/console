@@ -14,12 +14,6 @@ export function celsius(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)} °C` : "–";
 }
 
-export function signal(dbm) {
-  if (!Number.isFinite(dbm)) return "–";
-  const quality = dbm >= -55 ? "excellent" : dbm >= -67 ? "good" : dbm >= -75 ? "fair" : "weak";
-  return `${dbm} dBm (${quality})`;
-}
-
 export function percent(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)}%` : "–";
 }

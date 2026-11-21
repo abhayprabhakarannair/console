@@ -1,4 +1,4 @@
-import { bytes, celsius, duration, percent, signal } from "./format.js";
+import { bytes, celsius, duration, percent } from "./format.js";
 import { ROOT } from "./model.js";
 
 const POWER_ACTIONS = [
@@ -12,11 +12,11 @@ const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 const asArray = (v) => (Array.isArray(v) ? v : []);
 
 // Which device wakes which machine, and what it currently sees for it. Any device listing the machine in
-// meta.wakes can (imp, or a warden with the wake module); an online one is preferred, then the first by id.
+// meta.wakes can (a warden with the wake module); an online one is preferred, then the first by id.
 function wakers(registry) {
   const out = new Map();
   for (const d of [...registry.values()].sort((a, b) => a.id.localeCompare(b.id))) {
-    const targets = d.state?.targets ?? d.state?.wake?.targets;
+    const targets = d.state?.wake?.targets;
     for (const target of asArray(d.meta?.wakes)) {
       if (typeof target !== "string") continue;
       const online = d.status === "online";
@@ -115,18 +115,6 @@ function wardenFacts(state, now) {
   return facts;
 }
 
-function impFacts(d, now) {
-  const s = d.state ?? {};
-  const facts = [];
-  if (Number.isFinite(s.rssi)) facts.push({ label: "Wi-Fi", value: signal(s.rssi) });
-  if (Number.isFinite(s.uptime_s) && d.stateAt !== null) {
-    facts.push({ label: "Uptime", value: duration(s.uptime_s + (now - d.stateAt) / 1000) });
-  }
-  if (typeof s.ip === "string" && s.ip) facts.push({ label: "LAN IP", value: s.ip });
-  if (typeof d.meta?.version === "string") facts.push({ label: "Firmware", value: d.meta.version });
-  return facts;
-}
-
 function rawFacts(state) {
   return Object.entries(state ?? {})
     .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
@@ -165,16 +153,6 @@ export function cards(registry, now) {
         reason: !online ? `${id} is ${d.status ?? "unknown"}` : pending ? `${pending.action} pending` : null,
       });
     }
-    if (kind === "imp" && commands.has("restart")) {
-      actions.push({
-        label: "Restart",
-        topic: cmd(id),
-        payload: "restart console",
-        confirm: `Restart ${id}?`,
-        disabled: !online,
-        reason: online ? null : `${id} is ${d.status ?? "unknown"}`,
-      });
-    }
 
     const t = temps(d?.state);
     return {
@@ -186,7 +164,7 @@ export function cards(registry, now) {
         ? { ...pending, cancel: { topic: cmd(id), payload: "cancel console", disabled: !online } }
         : pending,
       actions,
-      facts: kind === "warden" ? wardenFacts(d.state, now) : kind === "imp" ? impFacts(d, now) : rawFacts(d?.state),
+      facts: kind === "warden" ? wardenFacts(d.state, now) : rawFacts(d?.state),
       temps: t,
       links: links(d?.state),
       clients: clients(d),
