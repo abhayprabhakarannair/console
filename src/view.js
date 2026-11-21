@@ -4,7 +4,7 @@ import { ROOT } from "./model.js";
 const POWER_ACTIONS = [
   { command: "suspend", label: "Sleep" },
   { command: "reboot", label: "Reboot", confirm: "Reboot {id}?" },
-  { command: "shutdown", label: "Shut down", confirm: "Shut down {id}?" },
+  { command: "shutdown", label: "Shut down", confirm: "Shut down {id}?", style: "danger" },
 ];
 
 const cmd = (id) => `${ROOT}/${id}/cmd`;
@@ -78,11 +78,21 @@ function clients(d) {
     });
 }
 
-function pendingOf(d, now) {
+// Seconds left until `due` (ms), never negative.
+export function countdown(due, now) {
+  return Math.max(0, Math.ceil((due - now) / 1000));
+}
+
+// Time since `since` (ms), formatted.
+export function elapsed(since, now) {
+  return duration((now - since) / 1000);
+}
+
+// `due` is counted from when the state arrived, since in_s was measured then.
+function pendingOf(d) {
   const p = d.state?.power?.pending;
   if (!isObject(p) || typeof p.action !== "string" || !Number.isFinite(p.in_s) || d.stateAt === null) return null;
-  const remaining = Math.max(0, Math.ceil((d.stateAt + p.in_s * 1000 - now) / 1000));
-  return { action: p.action, source: typeof p.source === "string" ? p.source : "?", remaining };
+  return { action: p.action, source: typeof p.source === "string" ? p.source : "?", due: d.stateAt + p.in_s * 1000 };
 }
 
 // Best available answer to "is this machine on": the LAN ping beats the agent's own status.
@@ -106,10 +116,10 @@ function temps(state) {
   return out;
 }
 
-function wardenFacts(state, now) {
+function wardenFacts(state) {
   const s = isObject(state?.system) ? state.system : {};
   const facts = [];
-  if (Number.isFinite(s.boot_time)) facts.push({ label: "Uptime", value: duration(now / 1000 - s.boot_time) });
+  if (Number.isFinite(s.boot_time)) facts.push({ label: "Uptime", since: s.boot_time * 1000 });
   if (Array.isArray(s.load) && s.load.every(Number.isFinite)) facts.push({ label: "Load", value: s.load.join(" / ") });
   if (Number.isFinite(s.mem_used_pct)) facts.push({ label: "Memory", value: percent(s.mem_used_pct) });
   if (typeof s.kernel === "string") facts.push({ label: "Kernel", value: s.kernel });
@@ -122,7 +132,9 @@ function rawFacts(state) {
     .map(([label, v]) => ({ label, value: String(v) }));
 }
 
-export function cards(registry, now) {
+// Cards hold no values derived from the current time, so they only change when the bus does; countdowns and
+// uptimes carry their reference time (`due`, `since`) for the page to tick with countdown() and elapsed().
+export function cards(registry) {
   const wake = wakers(registry);
   const ids = new Set([...registry.keys(), ...wake.keys()]);
   return [...ids].sort().map((id) => {
@@ -130,13 +142,14 @@ export function cards(registry, now) {
     const kind = d?.meta?.kind ?? (wake.has(id) ? "machine" : "unknown");
     const waker = wake.get(id);
     const online = d?.status === "online";
-    const pending = d ? pendingOf(d, now) : null;
+    const pending = d ? pendingOf(d) : null;
     const commands = new Set(asArray(d?.meta?.commands));
     const actions = [];
 
     if (waker) {
       actions.push({
         label: "Wake",
+        style: "primary",
         topic: cmd(waker.via),
         payload: `wake ${id} console`,
         disabled: !waker.online,
@@ -147,6 +160,7 @@ export function cards(registry, now) {
       if (!commands.has(a.command)) continue;
       actions.push({
         label: a.label,
+        style: a.style ?? null,
         topic: cmd(id),
         payload: `${a.command} console`,
         confirm: a.confirm?.replace("{id}", id) ?? null,
@@ -165,7 +179,7 @@ export function cards(registry, now) {
         ? { ...pending, cancel: { topic: cmd(id), payload: "cancel console", disabled: !online } }
         : pending,
       actions,
-      facts: kind === "warden" ? wardenFacts(d.state, now) : rawFacts(d?.state),
+      facts: kind === "warden" ? wardenFacts(d.state) : rawFacts(d?.state),
       temps: t,
       links: links(d?.state),
       clients: clients(d),
