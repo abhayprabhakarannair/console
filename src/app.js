@@ -111,15 +111,16 @@ function upsSection(u) {
 function linksSection(list) {
   return section("Internet", "globe", el("ul", { class: "links" }, ...list.map((l) => el("li", { class: l.active ? "active" : "" },
     el("div", { class: "link-head" },
-      el("span", { class: `dot ${l.online ? "ok" : "crit"}`, title: l.status }),
+      el("span", { class: `dot ${!l.online ? "crit" : l.degraded ? "warn" : "ok"}`, title: l.degraded ? "degraded" : l.status }),
       el("strong", {}, l.name),
       l.active ? el("span", { class: "badge ok small" }, "active") : null,
+      l.degraded ? el("span", { class: "badge warn small" }, "degraded") : null,
       !l.online ? el("span", { class: "muted" }, l.status) : null,
       l.rx || l.tx ? el("span", { class: "rates" },
         l.rx ? el("span", {}, icon("down", "icon tiny"), l.rx) : null,
         l.tx ? el("span", {}, icon("up", "icon tiny"), l.tx) : null) : null),
-    l.usage ? el("div", { class: "usage" },
-      el("span", {}, l.usage, " this cycle"),
+    l.usage || l.quality ? el("div", { class: "usage" },
+      el("span", {}, [l.usage ? `${l.usage} this cycle` : null, l.quality].filter(Boolean).join(" · ")),
       l.cap ? bar(l.cap.pct, l.cap.level) : null) : null))));
 }
 
@@ -130,11 +131,12 @@ function clientsSection(list) {
       el("span", { class: "link-icon", title: d.link ?? "" }, d.wired ? icon("wired") : d.bars !== null ? signal(d.bars) : null),
       el("div", { class: "who" },
         el("strong", {}, d.name ?? "unknown"),
-        el("span", { class: "muted" }, [d.ip, d.band].filter(Boolean).join(" · "))),
+        el("span", { class: "muted" }, [d.ip, d.band].filter(Boolean).join(" · ")),
+        d.fallback ? el("span", { class: "fallback" }, d.fallback) : null),
       d.isp.length
         ? el("div", { class: "segmented", role: "group", "aria-label": `ISP for ${d.name ?? d.ip}` }, ...d.isp.map((a) =>
           el("button", {
-            class: a.selected ? "selected" : "",
+            class: [a.selected ? "selected" : "", a.degraded ? "degraded" : ""].filter(Boolean).join(" "),
             "aria-pressed": a.selected ? "true" : "false",
             disabled: a.disabled || a.selected,
             title: a.reason ?? (a.label === "Auto" && d.via ? `now via ${d.via}` : null),

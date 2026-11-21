@@ -226,11 +226,17 @@ test("router card lists links in order with the active one and usage", () => {
     },
   })), "er605");
   assert.deepEqual(router.links, [
-    { name: "bsnl", status: "offline", online: false, active: false, usage: "5.2 GB", cap: null, rx: null, tx: null },
-    { name: "railwire", status: "online", online: true, active: true, usage: null, cap: null, rx: null, tx: null },
     {
-      name: "jio", status: "online", online: true, active: false, usage: "312 GB of 1.0 TB",
-      cap: { pct: 31.24, level: "ok" }, rx: null, tx: null,
+      name: "bsnl", status: "offline", online: false, degraded: false, quality: null, active: false, usage: "5.2 GB",
+      cap: null, rx: null, tx: null,
+    },
+    {
+      name: "railwire", status: "online", online: true, degraded: false, quality: null, active: true, usage: null,
+      cap: null, rx: null, tx: null,
+    },
+    {
+      name: "jio", status: "online", online: true, degraded: false, quality: null, active: false,
+      usage: "312 GB of 1.0 TB", cap: { pct: 31.24, level: "ok" }, rx: null, tx: null,
     },
   ]);
 });
@@ -258,7 +264,8 @@ test("devices show link, ISP and a choice of ISP sent to the router", () => {
   assert.deepEqual([satan.wired, satan.bars, satan.band, unnamed.wired, unnamed.bars, unnamed.band], [false, 3, "5 GHz", true, null, null]);
   assert.deepEqual(satan.isp.map((a) => [a.label, a.selected]), [["Auto", false], ["bsnl", false], ["jio", true]]);
   assert.deepEqual(satan.isp[1], {
-    label: "bsnl", topic: "home/er605/cmd", payload: "isp 192.0.2.8 bsnl console", selected: false, disabled: false, reason: null,
+    label: "bsnl", topic: "home/er605/cmd", payload: "isp 192.0.2.8 bsnl console", selected: false, degraded: false,
+    disabled: false, reason: null,
   });
   assert.deepEqual([unnamed.name, unnamed.link, unnamed.isp.find((a) => a.selected).label], [null, "wired", "Auto"]);
   assert.deepEqual([guest.isp, old.isp], [[], []]);
@@ -368,6 +375,65 @@ test("links carry live rates and a cap bar", () => {
     ["42.1 Mbit/s", "3.2 kbit/s", null],
     [null, null, { pct: 95, level: "crit" }],
   ]);
+});
+
+test("links show loss and latency, and degraded only while online", () => {
+  const router = byId(cards(withRouter({
+    routerState: {
+      wan: {
+        active: "bsnl",
+        links: [
+          { name: "bsnl", status: "online", loss_pct: 0, latency_ms: 18 },
+          { name: "railwire", status: "online", loss_pct: 8.04, latency_ms: 16.4, degraded: true },
+          { name: "jio", status: "offline", loss_pct: 100, degraded: true },
+          { name: "spare", status: "online", degraded: "yes", loss_pct: "x" },
+        ],
+      },
+    },
+  })), "er605");
+  assert.deepEqual(router.links.map((l) => [l.name, l.degraded, l.quality]), [
+    ["bsnl", false, "0.0% loss · 18 ms"],
+    ["railwire", true, "8.0% loss · 16 ms"],
+    ["jio", false, "100.0% loss"],
+    ["spare", false, null],
+  ]);
+});
+
+test("a device switched to a degraded or offline link says where it goes instead", () => {
+  const meta = { ...ROUTER_META, commands: ["wake", "isp", "refresh"] };
+  const state = {
+    wan: {
+      active: "bsnl",
+      links: [
+        { name: "bsnl", status: "online" },
+        { name: "railwire", status: "online", degraded: true },
+        { name: "jio", status: "offline" },
+      ],
+    },
+    clients: {
+      online: [
+        { name: "satan", ip: "192.0.2.8", via: "bsnl", override: "railwire", reserved: true },
+        { name: "tv", ip: "192.0.2.7", via: "bsnl", override: "jio", reserved: true },
+        { name: "pc", ip: "192.0.2.4", via: "bsnl", override: "bsnl", reserved: true },
+        { name: "lost", ip: "192.0.2.9", via: null, override: "railwire", reserved: true },
+      ],
+    },
+  };
+  const r = withRouter({ routerState: state });
+  apply(r, { topic: "home/er605/meta", payload: JSON.stringify(meta), now: NOW });
+  const [satan, tv, pc, lost] = byId(cards(r), "er605").clients;
+  assert.deepEqual([satan.fallback, tv.fallback, pc.fallback, lost.fallback],
+    ["railwire degraded → via bsnl", "jio offline → via bsnl", null, null]);
+  const railwire = satan.isp.find((a) => a.label === "railwire");
+  assert.deepEqual([railwire.selected, railwire.degraded, railwire.disabled, railwire.reason],
+    [true, true, false, "railwire is degraded: this device uses its automatic order until it recovers"]);
+  assert.deepEqual(satan.isp.filter((a) => a.degraded).map((a) => a.label), ["railwire"]);
+});
+
+test("the internet chip warns when the active link is degraded", () => {
+  const wan = (degraded) => ({ wan: { active: "bsnl", links: [{ name: "bsnl", status: "online", degraded }, { name: "jio", status: "online", degraded: true }] } });
+  assert.deepEqual(summary(withRouter({ routerState: wan(true) }))[0], { icon: "globe", label: "Internet", value: "bsnl · degraded", tone: "warn" });
+  assert.deepEqual(summary(withRouter({ routerState: wan(false) }))[0], { icon: "globe", label: "Internet", value: "bsnl", tone: "ok" });
 });
 
 test("temperatures group by chip family, hottest first, with levels", () => {

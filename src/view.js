@@ -1,4 +1,4 @@
-import { ago, bytes, celsius, duration, level, percent, rate, signalBars } from "./format.js";
+import { ago, bytes, celsius, duration, level, percent, quality, rate, signalBars } from "./format.js";
 import { ROOT } from "./model.js";
 
 // A device whose state is older than this is marked stale: three missed 30 s state intervals.
@@ -46,10 +46,14 @@ function links(state) {
       const used = num(l.used_bytes);
       const cap = num(l.cap_bytes);
       const capPct = used !== null && cap ? (100 * used) / cap : null;
+      const online = l.status === "online";
       return {
         name: l.name,
         status: l.status,
-        online: l.status === "online",
+        online,
+        // Up but lossy or slow, as judged by the router; only meaningful while the link is online.
+        degraded: online && l.degraded === true,
+        quality: quality(l.loss_pct, l.latency_ms),
         active: l.name === wan.active,
         usage: used === null ? null : cap ? `${bytes(used)} of ${bytes(cap)}` : bytes(used),
         cap: capPct === null ? null : { pct: Math.min(100, capPct), level: level(capPct, 80, 90) },
@@ -67,22 +71,37 @@ function linkText(c) {
 }
 
 // Per-device ISP choice: Auto plus every link, sent to the device that reported the list. Only for DHCP
-// reservations: an override follows the address, which another device could lease next.
-function ispChoices(d, c, override, names) {
-  if (c.reserved !== true || !asArray(d?.meta?.commands).includes("isp") || !names.length) return [];
+// reservations: an override follows the address, which another device could lease next. A degraded link can
+// still be chosen; the router routes the device by its automatic order until the link recovers.
+function ispChoices(d, c, override, wans) {
+  if (c.reserved !== true || !asArray(d?.meta?.commands).includes("isp") || !wans.length) return [];
   const online = d.status === "online";
-  return ["auto", ...names].map((isp) => ({
-    label: isp === "auto" ? "Auto" : isp,
-    topic: cmd(d.id),
-    payload: `isp ${c.ip} ${isp} console`,
-    selected: (override ?? "auto") === isp,
-    disabled: !online,
-    reason: online ? null : `${d.id} is ${d.status ?? "unknown"}`,
-  }));
+  return ["auto", ...wans.map((l) => l.name)].map((isp) => {
+    const degraded = wans.some((l) => l.name === isp && l.degraded);
+    return {
+      label: isp === "auto" ? "Auto" : isp,
+      topic: cmd(d.id),
+      payload: `isp ${c.ip} ${isp} console`,
+      selected: (override ?? "auto") === isp,
+      degraded,
+      disabled: !online,
+      reason: !online
+        ? `${d.id} is ${d.status ?? "unknown"}`
+        : degraded ? `${isp} is degraded: this device uses its automatic order until it recovers` : null,
+    };
+  });
+}
+
+// Why a device with an override is not using it: "railwire degraded → via bsnl".
+function fallbackNote(override, via, wans) {
+  if (!override || !via || override === via) return null;
+  const link = wans.find((l) => l.name === override);
+  const why = link?.degraded ? "degraded" : link && !link.online ? link.status : null;
+  return `${override}${why ? ` ${why}` : ""} → via ${via}`;
 }
 
 function clients(d) {
-  const names = links(d?.state).map((l) => l.name);
+  const wans = links(d?.state);
   return asArray(d?.state?.clients?.online)
     .filter((c) => isObject(c) && typeof c.ip === "string")
     .map((c) => {
@@ -96,7 +115,8 @@ function clients(d) {
         bars: c.link === "wifi" ? signalBars(c.signal) : null,
         via: typeof c.via === "string" ? c.via : null,
         override,
-        isp: ispChoices(d, c, override, names),
+        fallback: fallbackNote(override, typeof c.via === "string" ? c.via : null, wans),
+        isp: ispChoices(d, c, override, wans),
       };
     });
 }
@@ -318,7 +338,13 @@ export function summary(registry) {
   const router = devices.find((d) => isObject(d.state?.wan) && asArray(d.state.wan.links).length);
   if (router) {
     const active = typeof router.state.wan.active === "string" ? router.state.wan.active : null;
-    chips.push({ icon: "globe", label: "Internet", value: active ?? "down", tone: active ? "ok" : "crit" });
+    const degraded = active !== null && links(router.state).some((l) => l.name === active && l.degraded);
+    chips.push({
+      icon: "globe",
+      label: "Internet",
+      value: active === null ? "down" : degraded ? `${active} · degraded` : active,
+      tone: active === null ? "crit" : degraded ? "warn" : "ok",
+    });
   }
   const powered = devices.find((d) => isObject(d.state?.ups));
   if (powered) {
