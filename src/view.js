@@ -21,12 +21,16 @@ const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 const asArray = (v) => (Array.isArray(v) ? v : []);
 const num = (v) => (Number.isFinite(v) ? v : null);
 
+// A device's state while its agent runs. Retained state outlives the agent, so an offline or suspended one's
+// is a snapshot from before it stopped and is not shown as current.
+const current = (d) => (d && d.status !== "offline" && d.status !== "suspended" ? d.state : null);
+
 // Which device wakes which machine, and what it currently sees for it. Any device listing the machine in
 // meta.wakes can (a warden with the wake module); an online one is preferred, then the first by id.
 function wakers(registry) {
   const out = new Map();
   for (const d of [...registry.values()].sort((a, b) => a.id.localeCompare(b.id))) {
-    const targets = d.state?.wake?.targets;
+    const targets = current(d)?.wake?.targets;
     for (const target of asArray(d.meta?.wakes)) {
       if (typeof target !== "string") continue;
       const online = d.status === "online";
@@ -100,9 +104,9 @@ function fallbackNote(override, via, wans) {
   return `${override}${why ? ` ${why}` : ""} → via ${via}`;
 }
 
-function clients(d) {
-  const wans = links(d?.state);
-  return asArray(d?.state?.clients?.online)
+function clients(d, state) {
+  const wans = links(state);
+  return asArray(state?.clients?.online)
     .filter((c) => isObject(c) && typeof c.ip === "string")
     .map((c) => {
       const override = typeof c.override === "string" ? c.override : null;
@@ -138,7 +142,7 @@ export function freshness(updated, now) {
 
 // `due` is counted from when the state arrived, since in_s was measured then.
 function pendingOf(d) {
-  const p = d.state?.power?.pending;
+  const p = current(d)?.power?.pending;
   if (!isObject(p) || typeof p.action !== "string" || !Number.isFinite(p.in_s) || d.stateAt === null) return null;
   return { action: p.action, source: typeof p.source === "string" ? p.source : "?", due: d.stateAt + p.in_s * 1000 };
 }
@@ -301,29 +305,30 @@ export function cards(registry) {
       });
     }
 
-    const t = temps(d?.state);
-    const ups = upsOf(d?.state);
-    const clientList = clients(d);
+    const state = current(d);
+    const t = temps(state);
+    const ups = upsOf(state);
+    const clientList = clients(d, state);
     return {
       id,
       kind,
       status: d?.status ?? "unknown",
       power,
       badge: badgeOf(d, power, Boolean(waker)),
-      updated: d?.stateAt ?? null,
+      updated: state ? d.stateAt : null,
       subtitle: typeof d?.state?.system?.kernel === "string" ? d.state.system.kernel : null,
       alert: alertOf(ups),
       pending: pending && commands.has("cancel")
         ? { ...pending, cancel: { topic: cmd(id), payload: "cancel console", disabled: !online } }
         : pending,
       actions,
-      facts: kind === "warden" ? wardenFacts(d.state) : rawFacts(d?.state),
-      meters: kind === "warden" ? meters(d.state) : [],
+      facts: kind === "warden" ? wardenFacts(state) : rawFacts(state),
+      meters: kind === "warden" ? meters(state) : [],
       temps: t,
       tempGroups: tempGroups(t),
       hottest: t.length ? t.reduce((a, b) => (b.value > a.value ? b : a)) : null,
       ups,
-      links: links(d?.state),
+      links: links(state),
       clients: clientList,
       wide: clientList.length > 4,
       events: (d?.events ?? []).slice(-5).reverse(),
@@ -333,7 +338,8 @@ export function cards(registry) {
 
 // Chips for the top bar, from whatever the bus has: the internet link in use, the UPS and devices online.
 export function summary(registry) {
-  const devices = [...registry.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const devices = [...registry.values()].sort((a, b) => a.id.localeCompare(b.id))
+    .map((d) => ({ id: d.id, state: current(d) }));
   const chips = [];
   const router = devices.find((d) => isObject(d.state?.wan) && asArray(d.state.wan.links).length);
   if (router) {

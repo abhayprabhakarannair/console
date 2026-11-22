@@ -271,10 +271,11 @@ test("devices show link, ISP and a choice of ISP sent to the router", () => {
   assert.deepEqual([guest.isp, old.isp], [[], []]);
 });
 
-test("ISP choices are disabled while the router is offline and absent without the isp command", () => {
-  const offline = withRouter({ routerStatus: "offline", routerState: ROUTER_STATE });
-  apply(offline, { topic: "home/er605/meta", payload: JSON.stringify({ ...ROUTER_META, commands: ["isp"] }), now: NOW });
-  assert.ok(byId(cards(offline), "er605").clients[0].isp.every((a) => a.disabled));
+test("ISP choices are disabled while the router\'s status is unknown and absent without the isp command", () => {
+  const unknown = withRouter({ routerState: ROUTER_STATE });
+  apply(unknown, { topic: "home/er605/meta", payload: JSON.stringify({ ...ROUTER_META, commands: ["isp"] }), now: NOW });
+  apply(unknown, { topic: "home/er605/status", payload: "", now: NOW });
+  assert.ok(byId(cards(unknown), "er605").clients[0].isp.every((a) => a.disabled && a.reason === "er605 is unknown"));
   const without = byId(cards(withRouter({ routerState: ROUTER_STATE })), "er605");
   assert.deepEqual(without.clients[0].isp, []);
 });
@@ -462,4 +463,48 @@ test("summary chips come from whatever the bus has", () => {
   ]);
   const down = withRouter({ routerState: { wan: { active: null, links: [{ name: "bsnl", status: "offline" }] } } });
   assert.deepEqual(summary(down), [{ icon: "globe", label: "Internet", value: "down", tone: "crit" }]);
+});
+
+test("an offline or suspended agent's retained readings are not shown as current", () => {
+  const devilState = {
+    power: { pending: { action: "reboot", source: "phone", in_s: 10 } },
+    system: { boot_time: NOW / 1000 - 3600, load: [1, 1, 1], mem_used_pct: 50, disks: [{ mount: "/", used_pct: 40 }] },
+    sensors: { temps: { k10temp: { Tctl: 52 } } },
+    ups: { status: "on_battery", charge_pct: 54 },
+  };
+  for (const devilStatus of ["offline", "suspended"]) {
+    const devil = byId(cards(home({ devilStatus, target: { power: "offline" }, devilState })), "devil");
+    assert.deepEqual(
+      [devil.facts, devil.meters, devil.temps, devil.hottest, devil.ups, devil.alert, devil.pending, devil.updated],
+      [[], [], [], null, null, null, null, null], devilStatus);
+    assert.ok(action(devil, "Wake"));
+  }
+  const back = byId(cards(home({ devilState })), "devil");
+  assert.equal(back.facts.length, 2);
+  assert.deepEqual([back.meters.length, back.temps.length, back.ups.status, back.updated], [2, 1, "on_battery", NOW]);
+});
+
+test("an offline router's links and devices are not shown, nor its last view of what it wakes", () => {
+  const router = byId(cards(withRouter({ routerStatus: "offline", routerState: ROUTER_STATE })), "er605");
+  assert.deepEqual([router.links, router.clients], [[], []]);
+  const r = home({ devilStatus: "offline", wakerStatus: "offline", target: { power: "online" } });
+  assert.deepEqual(byId(cards(r), "devil").badge, { label: "Off", tone: "dim" });
+});
+
+test("a retained state has no age until a live one arrives", () => {
+  const r = registry([["home/x/status", "online"]]);
+  apply(r, { topic: "home/x/state", payload: "{\"a\":1}", retained: true, now: NOW });
+  assert.equal(byId(cards(r), "x").updated, null);
+  assert.deepEqual(byId(cards(r), "x").facts, [{ label: "a", value: "1" }]);
+  apply(r, { topic: "home/x/state", payload: "{\"a\":2}", now: NOW + 5 });
+  assert.equal(byId(cards(r), "x").updated, NOW + 5);
+});
+
+test("summary chips skip offline and suspended agents", () => {
+  const r = withRouter({ routerStatus: "offline", routerState: ROUTER_STATE });
+  apply(r, { topic: "home/devil/state", payload: JSON.stringify({ ups: { status: "online", charge_pct: 100 } }), now: NOW });
+  apply(r, { topic: "home/devil/status", payload: "suspended", now: NOW });
+  assert.deepEqual(summary(r), []);
+  apply(r, { topic: "home/devil/status", payload: "online", now: NOW });
+  assert.deepEqual(summary(r).map((c) => c.label), ["UPS"]);
 });
