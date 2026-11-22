@@ -65,7 +65,8 @@ export function apply(registry, { topic, payload, retained = false, now }) {
       if (!state) return null;
       const d = device(registry, id);
       d.state = state;
-      d.stateAt = now;
+      // A retained state was published at some unknown earlier time, so it has no age until a live one arrives.
+      d.stateAt = retained ? null : now;
       return id;
     }
     case "event": {

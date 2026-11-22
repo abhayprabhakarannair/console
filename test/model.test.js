@@ -67,3 +67,11 @@ test("an event cannot overwrite the receipt time", () => {
   apply(r, msg("home/er605/event", '{"event":"boot","at":1}', { now: 99 }));
   assert.equal(r.get("er605").events[0].at, 99);
 });
+
+test("a retained state has no arrival time; a live one does", () => {
+  const r = createRegistry();
+  apply(r, msg("home/devil/state", '{"a":1}', { retained: true }));
+  assert.deepEqual([r.get("devil").state, r.get("devil").stateAt], [{ a: 1 }, null]);
+  apply(r, msg("home/devil/state", '{"a":2}', { now: 2000 }));
+  assert.deepEqual([r.get("devil").state, r.get("devil").stateAt], [{ a: 2 }, 2000]);
+});
