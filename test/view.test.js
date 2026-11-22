@@ -468,20 +468,20 @@ test("summary chips come from whatever the bus has", () => {
 test("an offline or suspended agent's retained readings are not shown as current", () => {
   const devilState = {
     power: { pending: { action: "reboot", source: "phone", in_s: 10 } },
-    system: { boot_time: NOW / 1000 - 3600, load: [1, 1, 1], mem_used_pct: 50, disks: [{ mount: "/", used_pct: 40 }] },
+    system: { boot_time: NOW / 1000 - 3600, load: [1, 1, 1], mem_used_pct: 50, disks: [{ mount: "/", used_pct: 40 }], kernel: "7.3.5" },
     sensors: { temps: { k10temp: { Tctl: 52 } } },
     ups: { status: "on_battery", charge_pct: 54 },
   };
   for (const devilStatus of ["offline", "suspended"]) {
     const devil = byId(cards(home({ devilStatus, target: { power: "offline" }, devilState })), "devil");
     assert.deepEqual(
-      [devil.facts, devil.meters, devil.temps, devil.hottest, devil.ups, devil.alert, devil.pending, devil.updated],
-      [[], [], [], null, null, null, null, null], devilStatus);
+      [devil.facts, devil.meters, devil.temps, devil.hottest, devil.ups, devil.alert, devil.pending, devil.updated, devil.subtitle],
+      [[], [], [], null, null, null, null, null, null], devilStatus);
     assert.ok(action(devil, "Wake"));
   }
   const back = byId(cards(home({ devilState })), "devil");
   assert.equal(back.facts.length, 2);
-  assert.deepEqual([back.meters.length, back.temps.length, back.ups.status, back.updated], [2, 1, "on_battery", NOW]);
+  assert.deepEqual([back.meters.length, back.temps.length, back.ups.status, back.updated, back.subtitle], [2, 1, "on_battery", NOW, "7.3.5"]);
 });
 
 test("an offline router's links and devices are not shown, nor its last view of what it wakes", () => {

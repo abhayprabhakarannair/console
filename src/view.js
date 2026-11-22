@@ -316,7 +316,7 @@ export function cards(registry) {
       power,
       badge: badgeOf(d, power, Boolean(waker)),
       updated: state ? d.stateAt : null,
-      subtitle: typeof d?.state?.system?.kernel === "string" ? d.state.system.kernel : null,
+      subtitle: typeof state?.system?.kernel === "string" ? state.system.kernel : null,
       alert: alertOf(ups),
       pending: pending && commands.has("cancel")
         ? { ...pending, cancel: { topic: cmd(id), payload: "cancel console", disabled: !online } }
